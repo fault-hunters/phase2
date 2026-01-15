@@ -109,6 +109,15 @@ class InsertAnything(L.LightningModule):
         )
         return step_loss
 
+    def validation_step(self, batch, batch_idx):
+        # 학습과 동일하게 step 함수를 호출하여 Loss 계산
+        val_loss = self.step(batch)
+        
+        # 로그 기록: prog_bar=True로 설정하면 터미널 진행바에 표시됩니다.
+        self.log("val_loss", val_loss, prog_bar=True, on_epoch=True, sync_dist=True)
+        
+        return val_loss
+
     def step(self, batch):
         
 
