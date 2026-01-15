@@ -8,17 +8,17 @@ model:
   latent_lora: false
 
 train:
-  csv_path: /content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_train_nobom.csv
-  base_dir: /content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/
+  csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_train_nobom.csv"
+  base_dir: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/"
   batch_size: 8
   accumulate_grad_batches: 1
   dataloader_workers: 5
   # pin_memory: false
-  save_interval: 500
-  sample_interval: 500
+  save_interval: 20
+  sample_interval: 20
   max_steps: -1
   gradient_checkpointing: true
-  save_path: "runs"
+  save_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/finetuning"
 
   lora_config:
     r: 256
