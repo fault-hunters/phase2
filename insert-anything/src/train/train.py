@@ -36,26 +36,42 @@ def main():
     if is_main_process:
         print("Config:", config)
 
-    # =========================
-    # ✅ CSV dataset로 교체
-    # =========================
+    # ==========================================
+    # ✅ CSV dataset (Train & Val) 설정
+    # ==========================================
     csv_path = training_config.get("csv_path", None)
+    val_csv_path = training_config.get("val_csv_path", None) # YAML에서 val_csv_path 읽어옴
     base_dir = training_config.get("base_dir", "")
 
-    assert csv_path is not None, "train.csv_path must be set in config (insertanything.yaml)"
+    assert csv_path is not None, "train.csv_path must be set in config"
 
+    # 1. Train Loader
     train_dataset = AllDatasetCSV(
         csv_path=csv_path,
         base_dir=base_dir,
-        data_type=training_config.get("data_type", "noperson"),  # 필요 없으면 삭제 가능
+        data_type=training_config.get("data_type", "noperson"),
     )
-
     train_loader = DataLoader(
         train_dataset,
         batch_size=training_config["batch_size"],
         shuffle=True,
         num_workers=training_config["dataloader_workers"],
     )
+
+    # 2. Validation Loader (설정되어 있을 경우에만 생성)
+    val_loader = None
+    if val_csv_path:
+        val_dataset = AllDatasetCSV(
+            csv_path=val_csv_path,
+            base_dir=base_dir,
+            data_type=training_config.get("data_type", "noperson"),
+        )
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=training_config["batch_size"],
+            shuffle=False, # 검증 데이터는 섞지 않음
+            num_workers=training_config["dataloader_workers"],
+        )
 
     # Initialize model
     trainable_model = InsertAnything(
@@ -69,7 +85,7 @@ def main():
         gradient_checkpointing=training_config.get("gradient_checkpointing", False),
     )
 
-    # Callbacks for logging and saving checkpoints
+    # Callbacks
     training_callbacks = (
         [TrainingCallback(run_name, training_config=training_config)]
         if is_main_process
@@ -86,6 +102,8 @@ def main():
         max_steps=training_config.get("max_steps", -1),
         max_epochs=training_config.get("max_epochs", -1),
         gradient_clip_val=training_config.get("gradient_clip_val", 0.5),
+        # validation 로직이 있다면 얼마나 자주 체크할지 설정 (기본 1 epoch)
+        check_val_every_n_epoch=1 
     )
 
     setattr(trainer, "training_config", training_config)
@@ -97,8 +115,10 @@ def main():
         with open(f"{save_path}/{run_name}/config.yaml", "w") as f:
             yaml.dump(config, f)
 
-    # Start training
-    trainer.fit(trainable_model, train_loader)
+    # ==========================================
+    # ✅ Start training (Val Loader 포함)
+    # ==========================================
+    trainer.fit(trainable_model, train_loader, val_dataloaders=val_loader)
 
 if __name__ == "__main__":
     main()
