@@ -339,7 +339,8 @@ class TrainingCallback(L.Callback):
                     print(f"No mask for {source_image_filename}, skipping.")
                     
         # replace test_dir with the path to your test directory, like data/test/garment
-        test_dir = "path/to/test"
+        # callbacks.py 파일 하단 -- 폴더 구조 Inference data에 맞추기
+        test_dir = ""
         
         if os.path.exists(test_dir):
             final_inference(test_dir)
