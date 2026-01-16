@@ -8,8 +8,8 @@ model:
   latent_lora: false
 
 train:
-  csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_train_nobom.csv"
-  val_csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_val.csv"
+  csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_train_aug0116.csv"
+  val_csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_val_aug0116.csv"
   base_dir: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2"
   batch_size: 8
   accumulate_grad_batches: 1
@@ -28,9 +28,9 @@ train:
     target_modules: "(.*x_embedder|.*(?<!single_)transformer_blocks\\.[0-9]+\\.norm1\\.linear|.*(?<!single_)transformer_blocks\\.[0-9]+\\.attn\\.to_k|.*(?<!single_)transformer_blocks\\.[0-9]+\\.attn\\.to_q|.*(?<!single_)transformer_blocks\\.[0-9]+\\.attn\\.to_v|.*(?<!single_)transformer_blocks\\.[0-9]+\\.attn\\.to_out\\.0|.*(?<!single_)transformer_blocks\\.[0-9]+\\.ff\\.net\\.2|.*single_transformer_blocks\\.[0-9]+\\.norm\\.linear|.*single_transformer_blocks\\.[0-9]+\\.proj_mlp|.*single_transformer_blocks\\.[0-9]+\\.proj_out|.*single_transformer_blocks\\.[0-9]+\\.attn.to_k|.*single_transformer_blocks\\.[0-9]+\\.attn.to_q|.*single_transformer_blocks\\.[0-9]+\\.attn.to_v|.*single_transformer_blocks\\.[0-9]+\\.attn.to_out)"
 
   optimizer:
-    type: "Prodigy"
+    type: "AdamW"
     params:
-      lr: 1
-      use_bias_correction: true
-      safeguard_warmup: true
+      lr: 5e-5
       weight_decay: 0.01
+      eps: 1e-8
+      betas: [0.9, 0.999]
