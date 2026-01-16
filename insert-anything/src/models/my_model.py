@@ -84,10 +84,21 @@ class InsertAnything(L.LightningModule):
         # Unfreeze trainable parameters
         for p in self.trainable_params:
             p.requires_grad_(True)
+        
+        if "params" in opt_config:
+          for key in ["lr", "eps", "weight_decay"]:
+              if key in opt_config["params"] and isinstance(opt_config["params"][key], str):
+                  try:
+                      opt_config["params"][key] = float(opt_config["params"][key])
+                  except ValueError:
+                      pass # 숫자로 변환 불가능한 경우 스킵
 
         # Initialize the optimizer
         if opt_config["type"] == "AdamW":
-            optimizer = torch.optim.AdamW(self.trainable_params, **opt_config["params"])
+        # AdamW에 필요 없는 인자 필터링 (지난 에러 방지용)
+            valid_keys = ['lr', 'betas', 'eps', 'weight_decay', 'amsgrad']
+            filtered_params = {k: v for k, v in opt_config["params"].items() if k in valid_keys}
+            optimizer = torch.optim.AdamW(self.trainable_params, **filtered_params)
         elif opt_config["type"] == "Prodigy":
             optimizer = prodigyopt.Prodigy(
                 self.trainable_params,
@@ -102,19 +113,28 @@ class InsertAnything(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         step_loss = self.step(batch)
+        
+        # 1. 이동 평균 계산 (기존 로직 유지)
         self.log_loss = (
             step_loss.item()
             if not hasattr(self, "log_loss")
             else self.log_loss * 0.95 + step_loss.item() * 0.05
         )
+        
+        # 2. 시각화를 위한 로깅 (핵심 수정 사항)
+        # on_step=True: 스텝 단위 그래프 생성
+        # on_epoch=True: 에폭 단위 평균 그래프 생성
+        # prog_bar=True: 터미널 상단 진행바에 실시간 표시
+        self.log("train_loss", step_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        
         return step_loss
 
     def validation_step(self, batch, batch_idx):
-        # 학습과 동일하게 step 함수를 호출하여 Loss 계산
         val_loss = self.step(batch)
         
-        # 로그 기록: prog_bar=True로 설정하면 터미널 진행바에 표시됩니다.
-        self.log("val_loss", val_loss, prog_bar=True, on_epoch=True, sync_dist=True)
+        # 검증 Loss 로깅
+        # 검증은 보통 에폭 단위로만 보기 때문에 on_step은 제외하는 것이 일반적입니다.
+        self.log("val_loss", val_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         
         return val_loss
 
