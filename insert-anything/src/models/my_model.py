@@ -53,18 +53,24 @@ class InsertAnything(L.LightningModule):
         self.lora_layers = self.init_lora(lora_path, lora_config)
 
         self.to(device).to(dtype)
-
+    
+    # my_model.py 내 InsertAnything 클래스 수정
     def init_lora(self, lora_path: str, lora_config: dict):
-        assert lora_path or lora_config
-        if lora_path:
-            # TODO: Implement this
-            raise NotImplementedError
-        else:
+        # 1. 먼저 설정값에 따라 LoRA 어댑터를 추가합니다.
+        if lora_config:
             self.transformer.add_adapter(LoraConfig(**lora_config))
-            # TODO: Check if this is correct (p.requires_grad)
-            lora_layers = filter(
-                lambda p: p.requires_grad, self.transformer.parameters()
-            )
+        
+        # 2. 만약 이전에 학습된 가중치 경로(safetensors)가 들어왔다면 로드합니다.
+        if lora_path and os.path.exists(lora_path):
+            print(f"===> Loading Pre-trained LoRA weights from {lora_path}")
+            # FluxFillPipeline의 기능을 활용해 가중치만 로드 (가장 권장되는 방식)
+            # 파일이 위치한 '폴더' 경로를 받거나 파일 직접 지정 가능
+            self.transformer.load_adapter(lora_path, "default") 
+        
+        # 3. 학습 가능한 파라미터 필터링
+        lora_layers = filter(
+            lambda p: p.requires_grad, self.transformer.parameters()
+        )
         return list(lora_layers)
 
     def save_lora(self, path: str):
