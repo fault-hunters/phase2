@@ -8,6 +8,7 @@ model:
   latent_lora: false
 
 train:
+  resume_lora_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/finetuning/20260116-133056/ckpt/3600/pytorch_lora_weights.safetensors"
   csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_train_aug0116.csv"
   val_csv_path: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_val_aug0116.csv"
   base_dir: "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2"
