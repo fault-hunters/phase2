@@ -32,6 +32,10 @@ def main():
     training_config = config["train"]
     run_name = time.strftime("%Y%m%d-%H%M%S")
 
+    # ✅ YAML 설정에 'resume_lora_path'가 있는지 확인합니다.
+    # 예: resume_lora_path: "./output/20250117/ckpt/15000/pytorch_lora_weights.safetensors"
+    resume_path = training_config.get("resume_lora_path", None)
+
     print("Rank:", rank)
     if is_main_process:
         print("Config:", config)
@@ -77,6 +81,7 @@ def main():
     trainable_model = InsertAnything(
         flux_fill_id=config["flux_fill_path"],
         flux_redux_id=config["flux_redux_path"],
+        lora_path=resume_path,  # ✅ 추가된 파라미터 - LoRA
         lora_config=training_config["lora_config"],
         device=f"cuda",
         dtype=getattr(torch, config["dtype"]),
