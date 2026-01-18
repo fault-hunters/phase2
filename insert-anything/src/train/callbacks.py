@@ -221,130 +221,128 @@ class TrainingCallback(L.Callback):
         save_path,
         file_name,
     ):
-        # TODO: change this two variables to parameters
-
         seed = 42
         size = (768, 768)
+        
+        # --- 설정 부분 ---
+        csv_path = "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2/phase2_train_0116.csv" # CSV 파일 경로
+        base_dir = "/content/drive/MyDrive/[불량헌터스] 광고 이미지 텍스트 불량 감지 시스템/Dataset/phase2" # 데이터가 실제로 위치한 최상위 폴더 경로
+        num_samples = 5 # 매 샘플링 시점마다 인퍼런스 돌릴 행 개수
+        # ----------------
 
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        def final_inference(test_dir):
-            
-            os.makedirs(os.path.join(save_path, f"{file_name}_seed{seed}"), exist_ok=True)
+        def final_inference(csv_path, base_dir, n):
+            save_subdir = os.path.join(save_path, f"{file_name}_seed{seed}")
+            os.makedirs(save_subdir, exist_ok=True)
 
-            source_dir = f"{test_dir}/tar_image"
-            mask_dir = f"{test_dir}/tar_mask"
-            reference_dir = f"{test_dir}/ref_image"
-            ref_mask_dir = f"{test_dir}/ref_mask"
+            # CSV 로드 및 상위 n개 추출
+            df = pd.read_csv(csv_path)
+            test_df = df.head(n)
 
-            source_images = [f for f in os.listdir(source_dir) if f.endswith(".png") or f.endswith(".jpg")]
+            for index, row in test_df.iterrows():
+                # 경로 결합 (CSV의 ./ 경로 대응을 위해 lstrip 처리)
+                source_image_path = os.path.join(base_dir, row['tar_image'].lstrip('./'))
+                ref_image_path = os.path.join(base_dir, row['ref_image'].lstrip('./'))
+                ref_mask_path = os.path.join(base_dir, row['ref_masked'].lstrip('./'))
+                mask_image_path = os.path.join(base_dir, row['tar_masked'].lstrip('./'))
 
-            for source_image_filename in source_images:
+                source_image_filename = os.path.basename(source_image_path)
 
-                source_image_path = os.path.join(source_dir, source_image_filename)
-                mask_image_path = os.path.join(mask_dir, source_image_filename)
-  
                 if os.path.exists(mask_image_path):
+                    print(f"Generating sample {index+1}/{n}: {source_image_filename}...")
 
-                    print(f"Processing {source_image_filename}...")
-
-                    ref_image_path = os.path.join(reference_dir, source_image_filename)
-                    ref_mask_path = os.path.join(ref_mask_dir, source_image_filename)
-
+                    # 이미지 로드
                     ref_image = cv2.imread(ref_image_path)
                     ref_image = cv2.cvtColor(ref_image, cv2.COLOR_BGR2RGB)
                     tar_image = cv2.imread(source_image_path)
                     tar_image = cv2.cvtColor(tar_image, cv2.COLOR_BGR2RGB)
+                    
+                    # 마스크 처리
                     ref_mask = (cv2.imread(ref_mask_path) > 128).astype(np.uint8)[:, :, 0]
                     tar_mask = (cv2.imread(mask_image_path) > 128).astype(np.uint8)[:, :, 0]
 
-                    if tar_mask.shape != tar_image.shape:
+                    if tar_mask.shape != tar_image.shape[:2]:
                         tar_mask = cv2.resize(tar_mask, (tar_image.shape[1], tar_image.shape[0]))
 
+                    # --- 기존 전처리 로직 시작 ---
                     ref_box_yyxx = get_bbox_from_mask(ref_mask)
-                    ref_mask_3 = np.stack([ref_mask,ref_mask,ref_mask],-1)
-                    masked_ref_image = ref_image * ref_mask_3 + np.ones_like(ref_image) * 255 * (1-ref_mask_3) 
-                    y1,y2,x1,x2 = ref_box_yyxx
-                    masked_ref_image = masked_ref_image[y1:y2,x1:x2,:] 
-                    ref_mask = ref_mask[y1:y2,x1:x2] 
+                    ref_mask_3 = np.stack([ref_mask, ref_mask, ref_mask], -1)
+                    masked_ref_image = ref_image * ref_mask_3 + np.ones_like(ref_image) * 255 * (1 - ref_mask_3)
+                    
+                    y1, y2, x1, x2 = ref_box_yyxx
+                    masked_ref_image = masked_ref_image[y1:y2, x1:x2, :]
+                    ref_mask_crop = ref_mask[y1:y2, x1:x2]
+                    
                     ratio = 1.3
-                    masked_ref_image, ref_mask = expand_image_mask(masked_ref_image, ref_mask, ratio=ratio) 
+                    masked_ref_image, _ = expand_image_mask(masked_ref_image, ref_mask_crop, ratio=ratio)
+                    masked_ref_image = pad_to_square(masked_ref_image, pad_value=255, random=False)
 
-                    masked_ref_image = pad_to_square(masked_ref_image, pad_value = 255, random = False) 
-
-                    # kernel = np.ones((7, 7), np.uint8)
-                    # iterations = 2
-                    # tar_mask = cv2.dilate(tar_mask, kernel, iterations=iterations)
-
-                    # zome in
+                    # Zoom in target
                     tar_box_yyxx = get_bbox_from_mask(tar_mask)
                     tar_box_yyxx = expand_bbox(tar_mask, tar_box_yyxx, ratio=1.2)
-
-                    tar_box_yyxx_crop =  expand_bbox(tar_image, tar_box_yyxx, ratio=2)    #1.2 1.6
-                    tar_box_yyxx_crop = box2squre(tar_image, tar_box_yyxx_crop) # crop box
-                    y1,y2,x1,x2 = tar_box_yyxx_crop
-
+                    tar_box_yyxx_crop = expand_bbox(tar_image, tar_box_yyxx, ratio=2)
+                    tar_box_yyxx_crop = box2squre(tar_image, tar_box_yyxx_crop)
+                    
+                    ty1, ty2, tx1, tx2 = tar_box_yyxx_crop
                     old_tar_image = tar_image.copy()
+                    tar_image_crop = tar_image[ty1:ty2, tx1:tx2, :]
+                    tar_mask_crop = tar_mask[ty1:ty2, tx1:tx2]
 
-                    tar_image = tar_image[y1:y2,x1:x2,:]
-                    tar_mask = tar_mask[y1:y2,x1:x2]
+                    H1, W1 = tar_image_crop.shape[0], tar_image_crop.shape[1]
+                    tar_mask_sq = pad_to_square(tar_mask_crop, pad_value=0)
+                    tar_mask_resize = cv2.resize(tar_mask_sq, size)
 
-                    H1, W1 = tar_image.shape[0], tar_image.shape[1]
-                    # zome in
+                    masked_ref_image_resize = cv2.resize(masked_ref_image.astype(np.uint8), size).astype(np.uint8)
+                    
+                    # Flux Redux Prior
+                    pipe_prior_output = pl_module.flux_redux(Image.fromarray(masked_ref_image_resize))
 
-                    tar_mask = pad_to_square(tar_mask, pad_value=0)
-                    tar_mask = cv2.resize(tar_mask, size)
+                    tar_image_sq = pad_to_square(tar_image_crop, pad_value=255)
+                    H2, W2 = tar_image_sq.shape[0], tar_image_sq.shape[1]
+                    tar_image_resize = cv2.resize(tar_image_sq, size)
 
-                    masked_ref_image = cv2.resize(masked_ref_image.astype(np.uint8), size).astype(np.uint8)
-                    pipe_prior_output = pl_module.flux_redux(Image.fromarray(masked_ref_image))
+                    # Diptych 구성
+                    diptych_ref_tar = np.concatenate([masked_ref_image_resize, tar_image_resize], axis=1)
+                    tar_mask_3ch = np.stack([tar_mask_resize, tar_mask_resize, tar_mask_resize], -1)
+                    mask_black = np.zeros_like(tar_image_resize)
+                    mask_diptych = np.concatenate([mask_black, tar_mask_3ch], axis=1)
 
-                    tar_image = pad_to_square(tar_image, pad_value=255)
-                    H2, W2 = tar_image.shape[0], tar_image.shape[1]
-
-                    tar_image = cv2.resize(tar_image, size)
-                    diptych_ref_tar = np.concatenate([masked_ref_image, tar_image], axis=1)
-
-                    tar_mask = np.stack([tar_mask,tar_mask,tar_mask],-1)
-                    mask_black = np.ones_like(tar_image) * 0
-                    mask_diptych = np.concatenate([mask_black, tar_mask], axis=1)
-
-                    diptych_ref_tar = Image.fromarray(diptych_ref_tar)
+                    diptych_img = Image.fromarray(diptych_ref_tar)
                     mask_diptych[mask_diptych == 1] = 255
-                    mask_diptych = Image.fromarray(mask_diptych)
+                    mask_diptych_img = Image.fromarray(mask_diptych)
 
+                    # 모델 추론
                     generator = torch.Generator(pl_module.device).manual_seed(seed)
                     edited_image = pl_module.flux_fill_pipe(
-                        image=diptych_ref_tar,
-                        mask_image=mask_diptych,
-                        height=mask_diptych.size[1],
-                        width=mask_diptych.size[0],
+                        image=diptych_img,
+                        mask_image=mask_diptych_img,
+                        height=mask_diptych_img.size[1],
+                        width=mask_diptych_img.size[0],
                         max_sequence_length=512,
                         generator=generator,
-                        **pipe_prior_output,  # Use the output from the prior redux model
+                        **pipe_prior_output,
                     ).images[0]
 
-                    t_width, t_height = edited_image.size
-                    start_x = t_width // 2
-                    edited_image = edited_image.crop((start_x, 0, t_width, t_height))
-
-                    edited_image = np.array(edited_image)
-                    edited_image = crop_back(edited_image, old_tar_image, np.array([H1, W1, H2, W2]), np.array(tar_box_yyxx_crop)) 
-                    edited_image = Image.fromarray(edited_image)
-
-                    # Save the result
-                    edited_image_save_path = os.path.join(save_path, f"{file_name}_seed{seed}", f"{source_image_filename}")
-                    edited_image.save(edited_image_save_path)
-                else:
-                    print(f"No mask for {source_image_filename}, skipping.")
+                    # 후처리 및 저장
+                    tw, th = edited_image.size
+                    edited_image = edited_image.crop((tw // 2, 0, tw, th))
+                    edited_image_np = np.array(edited_image)
                     
-        # replace test_dir with the path to your test directory, like data/test/garment
-        # callbacks.py 파일 하단 -- 폴더 구조 Inference data에 맞추기
-        test_dir = ""
-        
-        if os.path.exists(test_dir):
-            final_inference(test_dir)
+                    final_output = crop_back(edited_image_np, old_tar_image, np.array([H1, W1, H2, W2]), np.array(tar_box_yyxx_crop))
+                    final_output = Image.fromarray(final_output)
 
+                    save_filename = f"step{steps}_{index}_{source_image_filename}"
+                    final_output.save(os.path.join(save_subdir, save_filename))
+                else:
+                    print(f"Skip {index}: Mask not found at {mask_image_path}")
+
+        # 로직 실행
+        if os.path.exists(csv_path):
+            final_inference(csv_path, base_dir, num_samples)
+        else:
+            print(f"CSV file not found at {csv_path}")
         
 
        
